@@ -1,1 +1,8 @@
-*.xm
+\#*#
+.#*
+*~
+*.so
+*.raw
+salmonella.log
+*.import.scm
+docs/

@@ -1,0 +1,5 @@
+(use setup-helper-mod)
+
+(setup-shared-extension-module
+  'xmkit
+  (extension-version "0.1.0"))

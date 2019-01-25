@@ -1,0 +1,6 @@
+((license "MIT")
+ (category parsing)
+ (author "Michael Neidel")
+ (synopsis "a toolbox for parsing eXtended Modules")
+ (depends setup-helper)
+ (test-depends test simple-md5))
