@@ -68,6 +68,7 @@
      xm:sequence-ref
      xm:pattern-used?
      xm:patterns
+     xm:pattern-length
      xm:pattern-data-ref
      xm:pattern-row-ref
      xm:pattern-track-ref
@@ -374,8 +375,8 @@
 	(list-ref (xm:patterns xm) i)
 	(error: "Pattern does not exist")))
 
-  ;; Returns the number of rows in the given pattern.
-  ;; Accepts either a raw pattern (xm:data) or unpacked pattern as input.
+  ;;; Returns the number of rows in the given pattern.
+  ;;; Accepts either a raw pattern (xm:data) or unpacked pattern as input.
   (define (xm:pattern-length pattern)
     (if (xm:pattern? pattern)
 	(xm:read-u16 pattern xm:pattern-offset-rows)
