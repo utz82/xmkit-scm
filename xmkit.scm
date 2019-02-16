@@ -69,6 +69,7 @@
      xm:pattern-used?
      xm:patterns
      xm:pattern-length
+     xm:unpack-pattern
      xm:pattern-data-ref
      xm:pattern-row-ref
      xm:pattern-track-ref
@@ -440,8 +441,8 @@
 	       (xm:drop-bytes data (xm:packed-track-row-size data))
 	       (- tracks 1)))))
 
-  ;; unpack raw pattern data into a list of rows, where each row is a list
-  ;; containing values for note, instrument, volume, fx command, and fx param
+  ;;; unpack raw pattern data into a list of rows, where each row is a list
+  ;;; containing values for note, instrument, volume, fx command, and fx param
   (define (xm:unpack-pattern pattern tracks)
     (letrec
 	((unpack-rows
