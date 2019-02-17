@@ -68,10 +68,19 @@
      xm:sequence-ref
      xm:pattern-used?
      xm:patterns
+     xm:pattern-ref
      xm:pattern-length
-     xm:unpack-pattern
-     xm:pattern-data-ref
+     xm:pattern-rows
      xm:pattern-row-ref
+     xm:pattern-notes
+     xm:pattern-instruments
+     xm:pattern-volumes
+     xm:pattern-volumes-normalized
+     xm:pattern-volume-fx
+     xm:pattern-fx
+     xm:pattern-fx-cmds
+     xm:pattern-fx-params
+     xm:pattern-tracks
      xm:pattern-track-ref
      xm:pattern-track-notes
      xm:pattern-track-instruments
@@ -146,9 +155,10 @@
   ;; The constructor is inaccessible outside the xm Scheme module, to enforce
   ;; additional checks on construction.
   (define-record-type xm:data
-    (xm:make-data type bytes)
+    (xm:make-data type tracks bytes)
     xm:data?
     (type xm:data-type)
+    (tracks xm:data-tracks)
     (bytes xm:data-bytes))
 
   (define-record-printer (xm:data data out)
@@ -178,16 +188,16 @@
 
   ;; aliases for constructing xm:data records of various types from a u8vector
   (define (xm:make-module u8v)
-    (xm:make-data 'xm:module u8v))
+    (xm:make-data 'xm:module #f u8v))
 
-  (define (xm:make-pattern u8v)
-    (xm:make-data 'xm:pattern u8v))
+  (define (xm:make-pattern tracks u8v)
+    (xm:make-data 'xm:pattern tracks u8v))
 
   (define (xm:make-instrument u8v)
-    (xm:make-data 'xm:instrument u8v))
+    (xm:make-data 'xm:instrument #f u8v))
 
   (define (xm:make-sample u8v)
-    (xm:make-data 'xm:sample u8v))
+    (xm:make-data 'xm:sample #f u8v))
 
   (define (xm:data-size xmdata)
     (u8vector-length (xm:data-bytes xmdata)))
@@ -364,6 +374,7 @@
 		     (let ((pattern-end (+ init-offset
 					   (pattern-size init-offset))))
   		       (cons (xm:make-pattern
+			      (xm:number-of-tracks xm)
 			      (subu8vector (xm:data-bytes xm)
 					   init-offset pattern-end))
   			     (extract-patterns pattern-end
@@ -371,7 +382,7 @@
       (extract-patterns (xm:header-size xm)
   			(xm:number-of-patterns xm))))
 
-  (define (xm:raw-pattern-ref xm i)
+  (define (xm:pattern-ref xm i)
     (if (< i (xm:number-of-patterns xm))
 	(list-ref (xm:patterns xm) i)
 	(error: "Pattern does not exist")))
@@ -441,11 +452,12 @@
 	       (xm:drop-bytes data (xm:packed-track-row-size data))
 	       (- tracks 1)))))
 
-  ;;; unpack raw pattern data into a list of rows, where each row is a list
+  ;;; unpack the given {{pattern}} into a list of rows, where each row is a list
   ;;; containing values for note, instrument, volume, fx command, and fx param
-  (define (xm:unpack-pattern pattern tracks)
-    (letrec
-	((unpack-rows
+  (define (xm:pattern-rows pattern)
+    (letrec*
+	((tracks (xm:data-tracks pattern))
+	 (unpack-rows
 	  (lambda (init-offset)
 	    (if (>= init-offset (sub1 (xm:data-size pattern)))
 		'()
@@ -458,132 +470,203 @@
       ;; dword at offset 0 specifies header size
       (unpack-rows (xm:read-u32 pattern 0))))
 
-  ;;; Get the given pattern as a nested list of rows, which are in turn given
-  ;;; as a nested list of track values.
-  ;;; Any track values that are not set are returned as {{#f}}.
-  (define (xm:pattern-data-ref xm pattern)
-    (if (>= pattern (xm:number-of-patterns xm))
-	(error "Pattern does not exist")
-	(xm:unpack-pattern (xm:raw-pattern-ref xm pattern)
-			   (xm:number-of-tracks xm))))
+  ;;; unpack the given {{pattern}} into a list of tracks, where each track is
+  ;;; a list of rows containing note, instrument, volume, fx command, and fx
+  ;;; parameter values
+  (define (xm:pattern-tracks pattern)
+    (let ((rows (xm:pattern-rows pattern)))
+      (map (lambda (track-ref)
+	     (map (lambda (row)
+		    (list-ref row track-ref))
+		  rows))
+	   (iota (xm:data-tracks pattern)))))
 
-  ;;; Get the {{row}} of {{pattern}} as a nested list of track values.
-  (define (xm:pattern-row-ref xm pattern row)
-    (if (>= pattern (xm:number-of-patterns xm))
-	(error "Pattern does not exist")
-	(let ((raw-pattern (xm:raw-pattern-ref xm pattern)))
-	  (if (>= row (xm:pattern-length raw-pattern))
-	      (error "Row does not exist")
-	      (list-ref (xm:unpack-pattern raw-pattern (xm:number-of-tracks xm))
-			row)))))
+  ;;; Return the note values of the given {{pattern}}, sorted in rows.
+  (define (xm:pattern-notes pattern)
+    (map (lambda (row)
+	   (map car row))
+	 (xm:pattern-rows pattern)))
 
-  ;;; Get the given {{track}} of the {{pattern}} as a nested list of values.
-  ;;; Note that track indices are 1-based, in line with XM terminology.
-  (define (xm:pattern-track-ref xm pattern track)
-    (cond ((>= pattern (xm:number-of-patterns xm))
-	   (error "Pattern does not exist"))
-	  ((or (> track (xm:number-of-tracks xm))
-	       (= track 0))
-	   (error "Track does not exist"))
-	  (else (let ((raw-pattern (xm:raw-pattern-ref xm pattern)))
-		  (map (lambda (row)
-			 (list-ref row (- track 1)))
-		       (xm:unpack-pattern raw-pattern
-					  (xm:number-of-tracks xm)))))))
+  ;;; Return the instrument values of the given {{pattern}}, sorted in rows.
+  (define (xm:pattern-instruments pattern)
+    (map (lambda (row)
+	   (map cadr row))
+	 (xm:pattern-rows pattern)))
 
-  ;;; Extract the note column of the given {{track}} in the given {{pattern}}.
-  (define (xm:pattern-track-notes xm pattern track)
-    (map car (xm:pattern-track-ref xm pattern track)))
+  ;;; Return the volume values of the given {{pattern}}, sorted in rows.
+  (define (xm:pattern-volumes pattern)
+    (map (lambda (row)
+	   (map caddr row))
+	 (xm:pattern-rows pattern)))
 
-  ;;; Extract the instrument column of the given {{track}} in the given
-  ;;; {{pattern}}.
-  (define (xm:pattern-track-instruments xm pattern track)
-    (map cadr (xm:pattern-track-ref xm pattern track)))
+  ;; return normalized vol if vol represents an actual volume change command,
+  ;; else return #f
+  (define (xm:normalize-vol vol)
+    (if vol
+	(if (and (>= vol #x10)
+		 (<= vol #x50))
+	    (- vol #x10)
+	    #f)
+	#f))
 
-  ;;; Extract the volume column of the given {{track}} in the given {{pattern}}.
-  (define (xm:pattern-track-volumes xm pattern track)
-    (map caddr (xm:pattern-track-ref xm pattern track)))
+  ;; construct a filter predicate function from the given list of volume fx
+  ;; commands
+  (define (xm:make-vfx-filter-pred fx-lst)
+    (if (null? fx-lst)
+	(lambda (v)
+	  (if v
+	      (if (>= v #x60) v #f)
+	      #f))
+	(let ((filter-list
+	       (map (lambda (fx)
+		      (car (alist-ref fx xm:volume-fx)))
+		    fx-lst)))
+	  (lambda (v)
+	    (if v
+		(if (member (bitwise-and v #xf0)
+			    filter-list)
+		    v #f)
+		#f)))))
 
-  ;;; Extract the volume column of the given {{track}} in the given {{pattern}},
-  ;;; and normalize volumes to the 0..#x40 range, omitting volume column fx.
-  (define (xm:pattern-track-volumes-normalized xm pattern track)
-    (map (lambda (v)
-	   (if v
-	       (if (and (>= v #x10)
-			(<= v #x50))
-		   (- v #x10)
-		   #f)
-	       #f))
-	 (xm:pattern-track-volumes xm pattern track)))
+  ;;; Return the volume values of the given {{pattern}}, sorted in rows. Volumes
+  ;;; are normalized to the 0..#x40 range, and volume effects are discarded.
+  (define (xm:pattern-volumes-normalized pattern)
+    (map (lambda (row)
+	   (map xm:normalize-vol row))
+	 (xm:pattern-volumes pattern)))
 
-  ;;; Extract the volume effects of the given {{track}} in the given
-  ;;; {{pattern}}. The output can optionally be filtered to return only the
-  ;;; given {{effects}}. {{effects}} can be any combination of '+x, '-x',
+  ;;; Return the volume effects in the given {{pattern}}, sorted in rows.
+  ;;; Optionally, the output can be filtered to include only the given
+  ;;; {{effects}}. {{effects}} can be any combination of '+x, '-x',
   ;;; Dx', Lx', 'Mx, 'Px, 'Rx, 'Sx, 'Ux, and 'Vx.
-  (define (xm:pattern-track-volume-fx xm pattern track . effects)
-    (let ((volumes (xm:pattern-track-volumes xm pattern track))
-	  (filter-pred (if (null? effects)
-			   (lambda (v)
-			     (if v
-				 (if (>= v #x60) v #f)
-				 #f))
-			   (let ((filter-list
-				  (map (lambda (fx)
-					 (car (alist-ref fx xm:volume-fx)))
-				       effects)))
-			     (lambda (v)
-			       (if v
-				   (if (member (bitwise-and v #xf0)
-					       filter-list)
-				       v #f)
-				   #f))))))
-      (map filter-pred volumes)))
+  (define (xm:pattern-volume-fx pattern . effects)
+    (map (lambda (row)
+	   (map (xm:make-vfx-filter-pred effects)
+		row))
+	 (xm:pattern-volumes pattern)))
 
-  ;;; Extract the effect command/parameter columns of the given {{track}} in
-  ;;; the given {{pattern}}. The output can optionally be filtered to return
-  ;;; only the given {{effects}}. For example,
+  ;; construct a filter predicate function from the given list of fx commands
+  (define (xm:make-fx-filter-pred fx-lst)
+    (if (null? fx-lst)
+	values
+	(let* ((make-filter-list
+		(lambda (fx-alist)
+		  (map (lambda (f) (car (alist-ref f fx-alist)))
+		       (filter (lambda (f) (member f (map car fx-alist)))
+			       fx-lst))))
+	       (regular-fx (make-filter-list xm:fx))
+	       (ext-fx (make-filter-list xm:extended-fx))
+	       (port-fx (make-filter-list xm:fine-port-fx)))
+	  (lambda (cmd/param)
+	    (if cmd/param
+		(if (or (member (car cmd/param) regular-fx)
+			(and (equal? #x0e (car cmd/param))
+			     (member (bitwise-and #xf0 (cadr cmd/param))
+				     ext-fx))
+			(and (equal? (car (alist-ref 'Xxx xm:fx))
+				     (car cmd/param))
+			     (member (bitwise-and #x30 (cadr cmd/param))
+				     port-fx)))
+		    cmd/param
+		    '(#f #f))
+		#f)))))
+
+  ;;; Return the effect command/parameter value pairs in the given {{pattern}}.
+  ;;; The output can optionally be filtered to return only the given
+  ;;; {{effects}}. For example,
   ;;; <enscript highlight="scheme">
   ;;; (xm:pattern-track-fx my-xm 0 1 '1xx '2xx '3xx)</enscript>
   ;;; will only return portamento effects. All common effects (0xx, 1xx, ..
   ;;; Fxx) are supported, as well as the extended effects (E0x, E1x, ... EFx),
   ;;; and the fine portamento effects (X1x, X2x).
-  (define (xm:pattern-track-fx xm pattern track . effects)
-    (let ((pattern-fx (map cdddr (xm:pattern-track-ref xm pattern track))))
-      (if (null? effects)
-	  pattern-fx
-	  (let* ((make-filter-list
-		  (lambda (fx-alist)
-		    (map (lambda (f) (car (alist-ref f fx-alist)))
-			 (filter (lambda (f) (member f (map car fx-alist)))
-				 effects))))
-		 (regular-fx (make-filter-list xm:fx))
-		 (ext-fx (make-filter-list xm:extended-fx))
-		 (port-fx (make-filter-list xm:fine-port-fx)))
-	    (map (lambda (cmd/param)
-		   (if (or (member (car cmd/param) regular-fx)
-			   (and (equal? #x0e (car cmd/param))
-				(member (bitwise-and #xf0 (cadr cmd/param))
-					ext-fx))
-			   (and (equal? (car (alist-ref 'Xxx xm:fx))
-					(car cmd/param))
-				(member (bitwise-and #x30 (cadr cmd/param))
-					port-fx)))
-		       cmd/param
-		       '(#f #f)))
-		 pattern-fx)))))
+  (define (xm:pattern-fx pattern . effects)
+    (let ((filter-pred (xm:make-fx-filter-pred effects)))
+      (map (lambda (row)
+	     (map (lambda (track)
+		    (filter-pred (cdddr track)))
+		  row))
+	   (xm:pattern-rows pattern))))
 
-  ;;; Extract the effect command column of the given {{track}} in the given
+  ;;; Return the effect command values of the given {{pattern}}, sorted in rows.
+  ;;; Optionally, the output can be filtered to only include the given
+  ;;; {{effects}}. See xm:pattern-fx for details.
+  (define (xm:pattern-fx-cmds pattern . effects)
+    (map (lambda (row)
+	   (map car row))
+	 (apply xm:pattern-fx (cons pattern effects))))
+
+  ;;; Return the effect parameters of the given {{pattern}}, sorted in rows.
+  ;;; Optionally, the output can be filtered to only include the
+  ;;; parameters of the given {{effects}}. For extended and fine porta effects,
+  ;;; the effect subcommand is included in the output.
+  ;;; See xm:pattern-fx for details.
+  (define (xm:pattern-fx-params pattern . effects)
+    (map (lambda (row)
+	   (map cadr row))
+	 (apply xm:pattern-fx (cons pattern effects))))
+
+  ;;; Get row {{i}} of the given {{pattern}} as a nested list of track values.
+  (define (xm:pattern-row-ref pattern i)
+    (if (>= i (xm:pattern-length pattern))
+	(error "Row does not exist")
+	(list-ref (xm:pattern-rows pattern)
+		  i)))
+
+  ;;; Return track {{i}} of the {{pattern}} as a nested list of values.
+  ;;; Note that track indices are 1-based, in line with XM terminology.
+  (define (xm:pattern-track-ref pattern i)
+    (if (or (> i (xm:data-tracks pattern))
+	    (= i 0))
+	(error "Track does not exist")
+	(map (lambda (row)
+	       (list-ref row (- i 1)))
+	     (xm:pattern-rows pattern))))
+
+  ;;; Extract the note column of track {{i}} in the given {{pattern}}.
+  (define (xm:pattern-track-notes pattern i)
+    (map car (xm:pattern-track-ref pattern i)))
+
+  ;;; Extract the instrument column of track {{i}} in the given {{pattern}}.
+  (define (xm:pattern-track-instruments pattern i)
+    (map cadr (xm:pattern-track-ref pattern i)))
+
+  ;;; Extract the volume column of track {{i}} in the given {{pattern}}.
+  (define (xm:pattern-track-volumes pattern i)
+    (map caddr (xm:pattern-track-ref pattern i)))
+
+  ;;; Extract the volume column of track {{i}} in the given {{pattern}},
+  ;;; and normalize volumes to the 0..#x40 range, omitting volume column fx.
+  (define (xm:pattern-track-volumes-normalized pattern i)
+    (map xm:normalize-vol (xm:pattern-track-volumes pattern i)))
+
+  ;;; Extract the volume effects of track {{i}} in the given
+  ;;; {{pattern}}. The output can optionally be filtered to return only the
+  ;;; given {{effects}}. See xm:pattern-volume-fx for details.
+  (define (xm:pattern-track-volume-fx pattern i . effects)
+    (map (xm:make-vfx-filter-pred effects)
+	 (xm:pattern-track-volumes pattern i)))
+
+  ;;; Extract the effect command/parameter columns of track {{i}} in
+  ;;; the given {{pattern}}. The output can optionally be filtered to return
+  ;;; only the given {{effects}}. See xm:pattern-fx for details.
+  (define (xm:pattern-track-fx pattern i . effects)
+    (map (xm:make-fx-filter-pred effects)
+	 (map cdddr (xm:pattern-track-ref pattern i))))
+
+  ;;; Extract the effect command column of the given track {{i}} in the given
   ;;; {{pattern}}. The output can optionally be filtered to return on the
-  ;;; {{effects}}. See xm:pattern-track-fx for details.
-  (define (xm:pattern-track-fx-cmds xm pattern track . effects)
-    (map car (apply xm:pattern-track-fx (append (list xm pattern track)
+  ;;; {{effects}}. See xm:pattern-fx for details.
+  (define (xm:pattern-track-fx-cmds pattern i . effects)
+    (map car (apply xm:pattern-track-fx (append (list pattern i)
 						effects))))
 
-  ;;; Extract the effect paramter column of the given {{track}} in the given
+  ;;; Extract the effect paramter column of track {{i}} in the given
   ;;; {{pattern}}. The output can optionally be filtered to return only the
-  ;;; parameters of the given {{effects}}. See xm:pattern-track-fx for details.
-  (define (xm:pattern-track-fx-params xm pattern track . effects)
-    (map cadr (apply xm:pattern-track-fx (append (list xm pattern track)
+  ;;; parameters of the given {{effects}}. For extended/fine porta effects, the
+  ;;; effect subcommand is inlcuded in the output.
+  ;;; See xm:pattern-fx for details.
+  (define (xm:pattern-track-fx-params pattern i . effects)
+    (map cadr (apply xm:pattern-track-fx (append (list pattern i)
 						 effects))))
 
   ;;;

@@ -24,6 +24,9 @@
 (use xmkit test simple-md5)
 
 (define my-xm (xm:file->module "test.xm"))
+(define my-ptn0 (xm:pattern-ref my-xm 0))
+(define my-ptn1 (xm:pattern-ref my-xm 1))
+(define my-ptn2 (xm:pattern-ref my-xm 2))
 (define my-instr (xm:instrument-ref my-xm 1))
 (define my-instr2 (xm:instrument-ref my-xm 2))
 (define my-instr3 (xm:instrument-ref my-xm 3))
@@ -52,28 +55,40 @@
 
 (test-group
  "Pattern Parser"
+ (test "xm:pattern-tracks" '(57 4 #f 3 16)
+       (list-ref (list-ref (xm:pattern-tracks my-ptn2) 1) 4))
  (test "xm:pattern-row-ref" '(57 4 #f 3 16)
-       (list-ref (xm:pattern-row-ref my-xm 2 4) 1))
+       (list-ref (xm:pattern-row-ref my-ptn2 4) 1))
+ (test "xm:pattern-notes" '(#f #f 75 #f 62 40 64 #f)
+       (list-ref (xm:pattern-notes my-ptn0) #x1a))
+ (test "xm:pattern-instruments" '(#f #f 3 4 3 #f #f #f)
+       (list-ref (xm:pattern-instruments my-ptn2) #x14))
+ (test "xm:pattern-volumes-normalized" '(#x3d #x30 #x20 #x10 #f #f #f #f)
+       (list-ref (xm:pattern-volumes-normalized my-ptn2) #x1e))
+ (test "xm:pattern-volume-fx" '(#f 113 #f 98 #f #f #f #f)
+       (list-ref (xm:pattern-volume-fx my-ptn2 '+x '-x) #xd))
+ (test "xm:pattern-fx-params" '(1 2 3 #f #f #f #f 7)
+       (list-ref (xm:pattern-fx-params my-ptn2 '4xx 'Axx) #x10))
  (test "xm:pattern-track-ref" '(68 3 #f 14 1)
-       (list-ref (xm:pattern-track-ref my-xm 1 2) 8))
+       (list-ref (xm:pattern-track-ref my-ptn1 2) 8))
  (test "xm:pattern-track-notes" 546
-       (apply + (filter number? (xm:pattern-track-notes my-xm 1 2))))
+       (apply + (filter number? (xm:pattern-track-notes my-ptn1 2))))
  (test "xm:pattern-track-instruments" 56
-       (apply + (filter number? (xm:pattern-track-instruments my-xm 1 1))))
+       (apply + (filter number? (xm:pattern-track-instruments my-ptn1 1))))
  (test "xm:pattern-track-volumes" 1521
-       (apply + (filter number? (xm:pattern-track-volumes my-xm 2 1))))
+       (apply + (filter number? (xm:pattern-track-volumes my-ptn2 1))))
  (test "xm:pattern-track-volumes-normalized" #x60
        (apply + (filter number?
-			(xm:pattern-track-volumes-normalized my-xm 0 8))))
+			(xm:pattern-track-volumes-normalized my-ptn0 8))))
  (test "xm:pattern-track-volume-fx" 342
        (apply + (filter number?
-			(xm:pattern-track-volume-fx my-xm 0 8 '+x '-x 'Dx))))
+			(xm:pattern-track-volume-fx my-ptn0 8 '+x '-x 'Dx))))
  (test "xm:pattern-track-fx-cmds" 120
-       (apply + (filter number? (xm:pattern-track-fx-cmds my-xm 2 4))))
- (test "xm:pattern-track-fx-params" 334
-       (apply + (filter number? (xm:pattern-track-fx-params my-xm 2 2))))
+       (apply + (filter number? (xm:pattern-track-fx-cmds my-ptn2 4))))
+ (test "xm:pattern-track-fx-params" 336
+       (apply + (filter number? (xm:pattern-track-fx-params my-ptn2 2))))
  (test "xm:pattern-track-fx" 509
-       (let ((rows (xm:pattern-track-fx my-xm 2 4)))
+       (let ((rows (xm:pattern-track-fx my-ptn2 4)))
 	 (apply + (filter number? (append (map car rows) (map cadr rows)))))))
 
 (test-group
