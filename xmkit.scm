@@ -51,7 +51,11 @@
 ;;;
 
 (module xmkit
-    (xm:u8vector->module
+    (xm:module?
+     xm:pattern?
+     xm:instrument?
+     xm:sample?
+     xm:u8vector->module
      xm:file->module
      xm:is-valid-xm?
      xm:module-name
@@ -164,23 +168,31 @@
   (define-record-printer (xm:data data out)
     (fprintf out "#<~s>" (xm:data-type data)))
 
+  ;;;
+  ;;; Type Predicates
+  ;;;
+
   ;; could short circuit this with an AND, but that would mean relying on
   ;; evaluation order which is not specified by Scheme standard
+  ;;;
   (define (xm:module? xmdata)
     (if (xm:data? xmdata)
 	(eq? (xm:data-type xmdata) 'xm:module)
 	#f))
 
+  ;;;
   (define (xm:pattern? xmdata)
     (if (xm:data? xmdata)
 	(eq? (xm:data-type xmdata) 'xm:pattern)
 	#f))
 
+  ;;;
   (define (xm:instrument? xmdata)
     (if (xm:data? xmdata)
 	(eq? (xm:data-type xmdata) 'xm:instrument)
 	#f))
 
+  ;;;
   (define (xm:sample? xmdata)
     (if (xm:data? xmdata)
 	(eq? (xm:data-type xmdata) 'xm:sample)
