@@ -169,7 +169,7 @@
     (fprintf out "#<~s>" (xm:data-type data)))
 
   ;;;
-  ;;; Type Predicates
+  ;;; ==== Type Predicates
   ;;;
 
   ;; could short circuit this with an AND, but that would mean relying on
@@ -935,9 +935,10 @@
 
   ;;;
   ;;; ==== Sample Related Procedures
+  ;;;
 
   ;;; Returns the sample at index {{smp}} of the instrument at index {{instr}}.
-  ;;; For {{instr}}, 1-based indexing, in line with the way indexing is done in
+  ;;; {{instr}} uses 1-based indexing, in line with the way indexing is done in
   ;;; XM.
   (define (xm:instrument-sample-ref xm instr smp)
     (let ((instrument (xm:instrument-ref xm instr)))
@@ -1068,7 +1069,7 @@
 
   ;;; Extract the sample data of given {{sample}} and export as a
   ;;; little-endian, signed, mono PCM RAW file with 8-bit or 16-bit data
-  ;;; depending on input sample data type
+  ;;; depending on input sample data type.
   (define (xm:export-sample sample filename)
     (let* ((pcm (xm:sample->pcm sample))
 	   (bytes (if (xm:sample-16bit-data? sample)
@@ -1085,6 +1086,20 @@
 		    bytes)))))
 
   ) ;; end module
+
+;;;
+;;; ==== Examples
+;;;
+;;; Extract the notes of pattern 1 to a list of rows
+;;; <enscript highlight="scheme">
+;;; (xm:pattern-notes (xm:pattern-ref (xm:file->module "myxm.xm") 1))
+;;; </enscript>
+;;;
+;;; Export sample 0 in instrument 2 to a RAW PCM file
+;;; <enscript highlight="scheme">
+;;; (xm:export-sample (xm:instrument-sample-ref (xm:file->module "myxm.xm")
+;;;                                             2 0)
+;;;                   "my-sample.raw")</enscript>
 
 ;;;
 ;;; ==== Author
