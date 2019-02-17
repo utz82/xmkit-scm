@@ -175,27 +175,27 @@
   ;; could short circuit this with an AND, but that would mean relying on
   ;; evaluation order which is not specified by Scheme standard
   ;;;
-  (define (xm:module? xmdata)
-    (if (xm:data? xmdata)
-	(eq? (xm:data-type xmdata) 'xm:module)
+  (define (xm:module? x)
+    (if (xm:data? x)
+	(eq? (xm:data-type x) 'xm:module)
 	#f))
 
   ;;;
-  (define (xm:pattern? xmdata)
-    (if (xm:data? xmdata)
-	(eq? (xm:data-type xmdata) 'xm:pattern)
+  (define (xm:pattern? x)
+    (if (xm:data? x)
+	(eq? (xm:data-type x) 'xm:pattern)
 	#f))
 
   ;;;
-  (define (xm:instrument? xmdata)
-    (if (xm:data? xmdata)
-	(eq? (xm:data-type xmdata) 'xm:instrument)
+  (define (xm:instrument? x)
+    (if (xm:data? x)
+	(eq? (xm:data-type x) 'xm:instrument)
 	#f))
 
   ;;;
-  (define (xm:sample? xmdata)
-    (if (xm:data? xmdata)
-	(eq? (xm:data-type xmdata) 'xm:sample)
+  (define (xm:sample? x)
+    (if (xm:data? x)
+	(eq? (xm:data-type x) 'xm:sample)
 	#f))
 
   ;; aliases for constructing xm:data records of various types from a u8vector
@@ -368,9 +368,6 @@
   ;;;
   ;;; ==== Pattern Related Procedures
   ;;;
-  ;;; Note the deliberate omission of a pattern-ref equivalent to the other
-  ;;; *-ref procedures. This is because compressed XM pattern data is
-  ;;; meaningless without knowledge of the containing module.
 
   ;;; Extract the module's patterns. Returns a list of xm:pattern records.
   (define (xm:patterns xm)
@@ -589,7 +586,7 @@
   ;;; <enscript highlight="scheme">
   ;;; (xm:pattern-track-fx my-xm 0 1 '1xx '2xx '3xx)</enscript>
   ;;; will only return portamento effects. All common effects (0xx, 1xx, ..
-  ;;; Fxx) are supported, as well as the extended effects (E0x, E1x, ... EFx),
+  ;;; Fxx) are supported, as well as the extended effects (E0x, E1x, .. EFx),
   ;;; and the fine portamento effects (X1x, X2x).
   (define (xm:pattern-fx pattern . effects)
     (let ((filter-pred (xm:make-fx-filter-pred effects)))
