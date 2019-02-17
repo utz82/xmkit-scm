@@ -37,7 +37,7 @@
 
 (test-group
  "Module Parser"
- (test-assert "xm:is-valid-xm?" (xm:is-valid-xm? my-xm))
+ (test-assert "xm:is-valid-xm-file?" (xm:is-valid-xm-file? "test.xm"))
  (test "xm:module-name" "xmkit test case" (xm:module-name my-xm))
  (test "xm:tracker-name" "MilkyTracker 1.00.00" (xm:tracker-name my-xm))
  (test "xm:song-length" 6 (xm:song-length my-xm))

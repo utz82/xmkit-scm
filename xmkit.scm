@@ -57,7 +57,7 @@
      xm:sample?
      xm:u8vector->module
      xm:file->module
-     xm:is-valid-xm?
+     xm:is-valid-xm-file?
      xm:module-name
      xm:tracker-name
      xm:song-length
@@ -293,11 +293,23 @@
   ;;;
   ;;; ==== Module Related Procedures
 
-  ;;; Checks if the given {{xm}} record contains a well-formed eXtended Module.
+  ;; Checks if the given {{xm}} record contains a well-formed eXtended Module.
   (define (xm:is-valid-xm? xm)
-    (and (= (xm:read-u8 xm 37) #x1a)
-	 (= (xm:read-u16 xm xm:offset-version-number) xm:legal-version)
-	 (string=? (xm:read-string xm 0 17) xm:magicbytes)))
+    (let ((check (lambda (thunk)
+		   (condition-case (thunk)
+		     [(exn) #f]
+		     [() #t]))))
+      (and (= (xm:read-u8 xm 37) #x1a)
+	   (= (xm:read-u16 xm xm:offset-version-number) xm:legal-version)
+	   (string=? (xm:read-string xm 0 17) xm:magicbytes)
+	   (check (lambda () (xm:patterns xm)))
+	   (check (lambda () (xm:instruments xm))))))
+
+  ;;; Determines whether the given file is a well-formed eXtended Module, by
+  ;;; validating the header and performing integrity checks.
+  (define (xm:is-valid-xm-file? filename)
+    (xm:is-valid-xm? (xm:make-module (with-input-from-file filename
+				       read-u8vector))))
 
   ;;; Constructs an xm:module record from a u8vector.
   (define (xm:u8vector->module u8v)
