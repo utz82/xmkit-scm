@@ -159,10 +159,10 @@
   ;; The constructor is inaccessible outside the xm Scheme module, to enforce
   ;; additional checks on construction.
   (define-record-type xm:data
-    (xm:make-data type tracks bytes)
+    (xm:make-data type aux bytes)
     xm:data?
     (type xm:data-type)
-    (tracks xm:data-tracks)
+    (aux xm:data-aux)
     (bytes xm:data-bytes))
 
   (define-record-printer (xm:data data out)
@@ -208,11 +208,17 @@
   (define (xm:make-instrument u8v)
     (xm:make-data 'xm:instrument #f u8v))
 
-  (define (xm:make-sample u8v)
-    (xm:make-data 'xm:sample #f u8v))
+  (define (xm:make-sample header u8v)
+    (xm:make-data 'xm:sample header u8v))
 
   (define (xm:data-size xmdata)
     (u8vector-length (xm:data-bytes xmdata)))
+
+  (define (xm:track-count pattern)
+    (xm:data-aux pattern))
+
+  (define (xm:sample-header sample)
+    (xm:data-aux sample))
 
   ;; check if all flags given in mask are set
   (define (xm:flags-set? mask val)
@@ -232,15 +238,19 @@
 	(- (+ 1 (bitwise-and posint-max (bitwise-not val))))
 	val))
 
-  ;; read a signed byte from an xm:data object
+  ;; read a signed byte from a u8vector
+  (define (xm:read-s8-raw u8v offset)
+    (xm:signed (u8vector-ref u8v offset) #x7f))
+
+  ;; read a signed byte from an xm:data record
   (define (xm:read-s8 xmdata offset)
     (xm:signed (xm:read-u8 xmdata offset) #x7f))
 
-  ;; read a signed word from an xm:data object
+  ;; read a signed word from an xm:data record
   (define (xm:read-s16 xmdata offset)
     (xm:signed (xm:read-u16 xmdata offset) #x7fff))
 
-  ;; read an unsigned byte from an xm:data object
+  ;; read an unsigned byte from an xm:data record
   (define (xm:read-u8 xmdata offset)
     (u8vector-ref (xm:data-bytes xmdata) offset))
 
@@ -249,7 +259,7 @@
     (+ (u8vector-ref u8v offset)
        (* 256 (u8vector-ref u8v (+ 1 offset)))))
 
-  ;; read an unsigned word from an xm:data object
+  ;; read an unsigned word from an xm:data record
   (define (xm:read-u16 xmdata offset)
     (xm:read-u16-raw (xm:data-bytes xmdata) offset))
 
@@ -258,7 +268,7 @@
     (+ (xm:read-u16-raw u8v offset)
        (* #x10000 (xm:read-u16-raw u8v (+ 2 offset)))))
 
-  ;; read an unsigned dword from an xm:data object
+  ;; read an unsigned dword from an xm:data record
   (define (xm:read-u32 xmdata offset)
     (xm:read-u32-raw (xm:data-bytes xmdata) offset))
 
@@ -266,20 +276,19 @@
   (define (xm:drop-bytes u8v n)
     (subu8vector u8v n (u8vector-length u8v)))
 
-  ;; merge two u8vectors
-  (define (xm:merge-u8vec v1 v2)
-    (list->u8vector (append (u8vector->list v1)
-			    (u8vector->list v2))))
-
-  (define (xm:read-string xmdata offset len)
+  ;; extract a string from a u8vector
+  (define (xm:read-string-raw u8v offset len)
     (blob->string
      (u8vector->blob
       (list->u8vector
        (filter (lambda (x)
 		 (not (equal? x #x0)))
-	       (u8vector->list (subu8vector (xm:data-bytes xmdata)
-					    offset
-					    (+ offset len))))))))
+	       (u8vector->list (subu8vector u8v offset (+ offset len))))))))
+
+  ;; read a string from an xm:data record
+  (define (xm:read-string xmdata offset len)
+    (xm:read-string-raw (xm:data-bytes xmdata)
+			offset len))
 
   ;;;
   ;;; ==== Module Related Procedures
@@ -442,7 +451,8 @@
 	  (let ((unpacked-row
 		 (map (lambda (flag slot)
 			(if (xm:flags-set? flag flag-byte)
-			    (u8vector-ref data (xm:packed-offset flag-byte slot))
+			    (u8vector-ref data
+					  (xm:packed-offset flag-byte slot))
 			    #f))
 		      xm:flags-pattern-data xm:slots-pattern-data)))
 	    (if (and (cadddr unpacked-row)
@@ -465,7 +475,7 @@
   ;;; containing values for note, instrument, volume, fx command, and fx param
   (define (xm:pattern-rows pattern)
     (letrec*
-	((tracks (xm:data-tracks pattern))
+	((tracks (xm:track-count pattern))
 	 (unpack-rows
 	  (lambda (init-offset)
 	    (if (>= init-offset (sub1 (xm:data-size pattern)))
@@ -488,7 +498,7 @@
 	     (map (lambda (row)
 		    (list-ref row track-ref))
 		  rows))
-	   (iota (xm:data-tracks pattern)))))
+	   (iota (xm:track-count pattern)))))
 
   ;;; Return the note values of the given {{pattern}}, sorted in rows.
   (define (xm:pattern-notes pattern)
@@ -624,7 +634,7 @@
   ;;; Return track {{i}} of the {{pattern}} as a nested list of values.
   ;;; Note that track indices are 1-based, in line with XM terminology.
   (define (xm:pattern-track-ref pattern i)
-    (if (or (> i (xm:data-tracks pattern))
+    (if (or (> i (xm:track-count pattern))
 	    (= i 0))
 	(error "Track does not exist")
 	(map (lambda (row)
@@ -700,6 +710,7 @@
   (define (xm:instrument-has-samples? instr)
     (> (xm:instrument-number-of-samples instr) 0))
 
+  ;; return the combined size of all sample headers.
   (define (xm:instrument-sample-header-size instr)
     (if (xm:instrument-has-samples? instr)
 	(* (xm:instrument-number-of-samples instr)
@@ -876,14 +887,16 @@
   ;; returns all of the instrument's sample headers as a list of u8vectors
   ;; will fail if instrument does not contain any sample headers
   (define (xm:instrument-sample-headers instr)
-    (letrec* ((extract-sample-headers
+    (letrec* ((sample-header-size
+	       (xm:read-u32 instr xm:instr-offset-sample-headers-size))
+	      (extract-sample-headers
 	      (lambda (init-offset remaining)
 		(if (= 0 remaining)
 		    '()
 		    (cons (subu8vector (xm:data-bytes instr) init-offset
-				       (+ init-offset xm:sample-header-size))
+				       (+ init-offset sample-header-size))
 			  (extract-sample-headers
-			   (+ init-offset xm:sample-header-size)
+			   (+ init-offset sample-header-size)
 			   (- remaining 1)))))))
       (extract-sample-headers (xm:instrument-header-size instr)
 			      (xm:instrument-number-of-samples instr))))
@@ -948,25 +961,31 @@
 
   ;;; Returns the number of sample points, not the number of bytes.
   (define (xm:sample-length sample)
-    (if (xm:sample-16bit-data? sample)
-	(/ (xm:read-u32 sample xm:sample-offset-length) 2)
-	(xm:read-u32 sample xm:sample-offset-length)))
+    (let ((raw-length (xm:read-u32-raw (xm:sample-header sample)
+				       xm:sample-offset-length)))
+      (if (xm:sample-16bit-data? sample)
+	  (/ raw-length 2)
+	  raw-length)))
 
   ;;; Returns the sample name.
   (define (xm:sample-name sample)
-    (xm:read-string sample xm:sample-offset-name xm:sample-name-length))
+    (xm:read-string-raw (xm:sample-header sample)
+			xm:sample-offset-name xm:sample-name-length))
 
   ;;; Returns the sample loop start position.
   (define (xm:sample-loop-start sample)
-    (xm:read-u32 sample xm:sample-offset-loop-start))
+    (xm:read-u32-raw (xm:sample-header sample)
+		     xm:sample-offset-loop-start))
 
   ;;; Returns the sample loop length.
   (define (xm:sample-loop-length sample)
-    (xm:read-u32 sample xm:sample-offset-loop-length))
+    (xm:read-u32-raw (xm:sample-header sample)
+		     xm:sample-offset-loop-length))
 
   ;;; Returns the sample loop type byte.
   (define (xm:sample-loop-type sample)
-    (xm:read-u8 sample xm:sample-offset-loop-type))
+    (u8vector-ref (xm:sample-header sample)
+		  xm:sample-offset-loop-type))
 
   ;;; Returns {{#t}} if sample looping is enabled.
   (define (xm:sample-loop-enabled? sample)
@@ -994,19 +1013,23 @@
 
   ;;; Returns the volume setting.
   (define (xm:sample-volume sample)
-    (xm:read-u8 sample xm:sample-offset-volume))
+    (u8vector-ref (xm:sample-header sample)
+		  xm:sample-offset-volume))
 
   ;;; Returns the finetune setting.
   (define (xm:sample-finetune sample)
-    (xm:read-s8 sample xm:sample-offset-finetune))
+    (xm:read-s8-raw (xm:sample-header sample)
+		    xm:sample-offset-finetune))
 
   ;;; Returns the panning position.
   (define (xm:sample-panning sample)
-    (xm:read-u8 sample xm:sample-offset-panning))
+    (u8vector-ref (xm:sample-header sample)
+		  xm:sample-offset-panning))
 
   ;;; Returns the relative note setting.
   (define (xm:sample-relative-note sample)
-    (xm:read-s8 sample xm:sample-offset-relative-note))
+    (xm:read-s8-raw (xm:sample-header sample)
+		    xm:sample-offset-relative-note))
 
   ;; Determine the size of the raw sample data. This function expects a
   ;; sample header (plain u8vector) as input.
@@ -1023,10 +1046,9 @@
 		'()
 		(let ((next-offset
 		       (+ init-offset (xm:sample-data-size (car headers)))))
-		  (cons (xm:make-sample
-			 (xm:merge-u8vec (car headers)
-					 (subu8vector (xm:data-bytes instr)
-						      init-offset next-offset)))
+		  (cons (xm:make-sample (car headers)
+			 (subu8vector (xm:data-bytes instr)
+				      init-offset next-offset))
 			(extract-samples next-offset (cdr headers))))))))
       (extract-samples (+ (xm:instrument-header-size instr)
 			  (xm:instrument-sample-header-size instr))
@@ -1052,7 +1074,7 @@
 			       (extract-sample-data (+ 2 init-offset)))
 			 (cons (xm:read-s8 sample init-offset)
 			       (extract-sample-data (+ 1 init-offset))))))))
-      (extract-sample-data xm:sample-header-size)))
+      (extract-sample-data 0)))
 
   ;;; Retrieves the internal sample data and convert it to standard RAW PCM.
   (define (xm:sample->pcm sample)

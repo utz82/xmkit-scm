@@ -90,7 +90,6 @@
   (list xm:slot-note xm:slot-instrument xm:slot-volume xm:slot-fx-cmd
 	xm:slot-fx-param))
 (define xm:unpacked-row-size 5)
-(define xm:sample-header-size 40)
 (define xm:module-name-length 20)
 (define xm:tracker-name-length 20)
 (define xm:instr-name-length 22)
