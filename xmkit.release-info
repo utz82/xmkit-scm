@@ -1,4 +1,4 @@
 (repo git "https://github.com/utz82/xmkit-scm.git")
 
-(uri targz "https://github.com/utz82/xmkit-scm/releases/archive/v{egg-release}.tar.gz")
+(uri targz "https://github.com/utz82/xmkit-scm/archive/v{egg-release}.tar.gz")
 (release "0.1.0")
