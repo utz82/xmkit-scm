@@ -1,5 +1,6 @@
 # xmkit-scm
 
-xmkit-scm is a Chicken Scheme egg for parsing eXtended Modules (XM). Currently only supports Chicken 4.
+xmkit-scm is a [Chicken Scheme](https://call-cc.org) egg for parsing eXtended Modules (XM). Currently only supports Chicken 4.
 
-Documentation can be build locally by running [https://github.com/utz82/scm2wiki](scm2wiki) on xmkit.scm.
+Full documentation is available the eggs' [wiki page](https://wiki.call-cc.org/eggref/4/xmkit).
+You can build documentation locally by running [scm2wiki](https://github.com/utz82/scm2wiki) on xmkit.scm.

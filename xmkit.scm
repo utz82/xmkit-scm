@@ -412,6 +412,7 @@
       (extract-patterns (xm:header-size xm)
   			(xm:number-of-patterns xm))))
 
+  ;;; Extract pattern {{i}} from the given {{xm}} record.
   (define (xm:pattern-ref xm i)
     (if (< i (xm:number-of-patterns xm))
 	(list-ref (xm:patterns xm) i)
@@ -483,7 +484,7 @@
 	       (xm:drop-bytes data (xm:packed-track-row-size data))
 	       (- tracks 1)))))
 
-  ;;; unpack the given {{pattern}} into a list of rows, where each row is a list
+  ;;; Unpack the given {{pattern}} into a list of rows, where each row is a list
   ;;; containing values for note, instrument, volume, fx command, and fx param
   (define (xm:pattern-rows pattern)
     (letrec*
@@ -501,7 +502,7 @@
       ;; dword at offset 0 specifies header size
       (unpack-rows (xm:read-u32 pattern 0))))
 
-  ;;; unpack the given {{pattern}} into a list of tracks, where each track is
+  ;;; Unpack the given {{pattern}} into a list of tracks, where each track is
   ;;; a list of rows containing note, instrument, volume, fx command, and fx
   ;;; parameter values
   (define (xm:pattern-tracks pattern)
@@ -962,9 +963,9 @@
   ;;; ==== Sample Related Procedures
   ;;;
 
-  ;;; Returns the sample at index {{smp}} of the instrument at index {{instr}}.
-  ;;; {{instr}} uses 1-based indexing, in line with the way indexing is done in
-  ;;; XM.
+  ;;; Returns the sample at index {{smp}} of the instrument at index
+  ;;; {{instr}}. {{instr}} uses 1-based indexing, in line with the way indexing
+  ;;; is done in XM.
   (define (xm:instrument-sample-ref xm instr smp)
     (let ((instrument (xm:instrument-ref xm instr)))
       (if instrument
@@ -1136,15 +1137,15 @@
 ;;;                   "my-sample.raw")</enscript>
 
 ;;;
-;;; ==== Author
+;;; === Author
 ;;;
 ;;; (c) 2019 Michael Neidel
 ;;;
-;;; ==== License
+;;; === License
 ;;;
 ;;; MIT
 ;;;
-;;; ==== Version History
+;;; === Version History
 ;;;
 ;;; * 0.1.0 Initial Release
 ;;;
